@@ -57,7 +57,12 @@ def is_classification(a):
 
 
 def scope_issues(a):
-    """Step 1: scope questions S1 to S3 (Table 4.10)."""
+    """Step 1: scope check (Table 4.10).
+
+    S1 = one table with the column to predict (thesis S1), S2 = free text or
+    forecasting (thesis S2 and S3), S3 = size limits (thesis S4). In the app,
+    the user confirms all conditions at once.
+    """
     return [
         explanation for applies, explanation in (
             (a.get("S1") == "No",
@@ -166,10 +171,11 @@ def recommend(a):
     # Dataset questions (Table 4.12): notes and warnings, no change of order.
     unknown = unanswered_segments(a)
     if unknown:
+        these = "This characteristic was" if len(unknown) == 1 else "These characteristics were"
         general.append(
             "You answered Not sure for: " + "; ".join(u[0].lower() + u[1:] for u in unknown)
-            + ". These characteristics were not used for the order. The Python snippet in the "
-            "dataset section shows how to check them.")
+            + f". {these} not used for the order. The Python scripts in the dataset section "
+            "show how to check them.")
     if applies(a, "D2"):
         notes["MLJAR AutoML"].append(
             "Ranked significantly lower than AutoGluon on the nine datasets with more than 10,000 rows.")

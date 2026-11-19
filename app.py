@@ -32,29 +32,33 @@ FIT_TIMES = {
 }
 YES_NO = ("Yes", "No")
 YES_NO_UNSURE = ("Yes", "No", NOT_SURE)
-CHECK_SNIPPET = """import pandas as pd
+CHECK_SIZE = """import pandas as pd
 
 df = pd.read_csv("your_table.csv")   # your table
 target = "column_to_predict"         # the column to predict
 X, y = df.drop(columns=[target]), df[target]
 
 print("Rows:", len(df))
-print("Predictors:", X.shape[1])
+print("Predictor columns:", X.shape[1])
 categorical = X.select_dtypes(exclude="number").columns
 print("Share of categorical predictors:",
       round(len(categorical) / X.shape[1], 2))
 print("Share of rows with a missing value:",
       round(X.isna().any(axis=1).mean(), 2))
-print("Empty or constant columns:",
-      [c for c in X if X[c].nunique(dropna=True) <= 1])
 
 # Classification only
 counts = y.value_counts()
 print("Most / least frequent class:",
       round(counts.max() / counts.min(), 1))
+"""
+CHECK_FORMAT = """# Continue with df, X, and y from the first script
+print("Empty or constant columns:",
+      [c for c in X if X[c].nunique(dropna=True) <= 1])
+
+# Classification only
 print("Labels stored as numbers:",
       pd.api.types.is_numeric_dtype(y))
-print("Smallest class:", counts.min())
+print("Smallest class:", y.value_counts().min())
 """
 
 st.set_page_config(page_title="AutoML Selection Guide", layout="centered")
@@ -243,7 +247,8 @@ def questionnaire():
                    "guide cannot recommend a tool, because the tools were not compared on such "
                    "tasks.")
         return
-    # Confirming the conditions answers the scope questions S1 to S3 (Table 4.10).
+    # Confirming the conditions S1 to S4 (Table 4.10) answers the internal scope
+    # checks of recommendations.py.
     answers.update({"S1": "Yes", "S2": "No", "S3": "No"})
 
     st.subheader("Environment", anchor=False)
@@ -265,13 +270,8 @@ def questionnaire():
                   "About This Mac. On Windows, see Settings, System, About.")
 
     st.subheader("Dataset characteristics", anchor=False)
-    st.caption("Don’t know an answer? Choose “Not sure”. The Python script below helps you "
-               "check most of the answers.")
-    with st.expander("How to check these characteristics with Python"):
-        st.code(CHECK_SNIPPET, language="python")
-        st.caption("Categories stored as numeric codes and identifier columns cannot be detected "
-                   "reliably by code, so check them by looking at the columns. Such codes are "
-                   "counted as numeric in the share of categorical predictors.")
+    st.caption("Don’t know an answer? Choose “Not sure”. Each group of questions has a short "
+               "Python script that helps you check the answers.")
     ask("D1", "What should be predicted?", TASK_TYPES,
         "Two classes: binary classification. More than two classes: multiclass "
         "classification. A number: regression.")
@@ -280,6 +280,9 @@ def questionnaire():
     st.markdown("**Size and content of the data**")
     st.caption("These answers decide the order of the recommended tools. “Not sure” is "
                "treated as No.")
+    with st.expander("How to check these answers with Python"):
+        st.code(CHECK_SIZE, language="python")
+        st.caption("Categories stored as numeric codes are counted as numeric here.")
     ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE,
         help_text="Each row is one example, such as one patient or one customer.")
     ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE,
@@ -298,6 +301,10 @@ def questionnaire():
     st.markdown("**Format of the data**")
     st.caption("These answers do not change the order. They add preparation tips and warnings, "
                "which are also shown for “Not sure”.")
+    with st.expander("How to check these answers with Python"):
+        st.code(CHECK_FORMAT, language="python")
+        st.caption("Categories stored as numeric codes and identifier columns cannot be detected "
+                   "reliably by code, so check them by looking at the columns.")
     if classification:
         ask("D7", "Are the class labels stored as numbers?", YES_NO_UNSURE,
             help_text="For example, 0 and 1 used as labels for two categories.")
