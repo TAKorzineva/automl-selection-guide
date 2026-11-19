@@ -11,7 +11,7 @@ from pathlib import Path
 import streamlit as st
 
 from recommendations import (MEMORY, NOT_SURE, RANKS, SEGMENT_LABELS, TASK_TYPES,
-                             TIME, recommend, scope_issues)
+                             TIME, recommend)
 
 DATA = Path(__file__).parent / "data"
 CARDS = json.loads((DATA / "tool_cards.json").read_text(encoding="utf-8"))
@@ -106,7 +106,7 @@ answers = {}
 
 
 def ask(key, label, options=YES_NO, help_text=None):
-    answers[key] = st.radio(label, options, index=None, key=key, help=help_text,
+    answers[key] = st.radio(f"{key}. {label}", options, index=None, key=key, help=help_text,
                             horizontal=len(options) <= 3)
 
 
@@ -123,8 +123,13 @@ def show_preparation(tool, result):
 
 def show_results(result, task):
     st.header("Your recommendations", anchor=False)
-    for message in result["general"]:
-        st.warning(message)
+    ranked = result["ranked"]
+    if len(ranked) == 1:
+        st.success(f"Start with {ranked[0]}, the only recommended tool available in your "
+                   "environment.")
+    elif ranked:
+        st.success(f"Start with {ranked[0]}. If it does not suit your data or setup, try "
+                   f"{ranked[1]} next.")
 
     st.subheader("Recommended tools", anchor=False)
     st.caption(
@@ -149,6 +154,10 @@ def show_results(result, task):
                 st.markdown(f"- {note}")
             with st.expander(f"View {tool} tool card"):
                 show_card(tool, task)
+
+    if result["general"]:
+        st.subheader("Before you start", anchor=False)
+        st.warning("\n".join(f"- {message}" for message in result["general"]))
 
     if result["alternatives"]:
         st.subheader("Other available tools", anchor=False)
@@ -205,36 +214,48 @@ def show_results(result, task):
 
 
 def questionnaire():
-    st.subheader("Task scope", anchor=False)
-    ask("S1", "Is the data a single table that contains the column to predict?")
-    ask("S2", "Does the task involve free text, such as comments or descriptions, or "
-              "forecasting future values from past values, such as next month's sales?")
-    ask("S3", "Does the table have more than 100,000 rows or more than 1,000 columns besides "
-              "the column to predict?")
-    issues = scope_issues(answers)
-    if issues:
-        st.warning("Your task lies outside the scope of the framework, so no tool is recommended.")
-        for issue in issues:
-            st.markdown(f"- {issue}")
+    st.subheader("Check whether this guide fits your task", anchor=False)
+    st.info(
+        "You can use this guide if all of the following apply:\n"
+        "- Your data are in one table, including the column you want to predict.\n"
+        "- Your task uses tabular features, without free-text inputs such as comments or "
+        "descriptions.\n"
+        "- You are not forecasting future values from past observations, such as predicting "
+        "next month's sales from previous months.\n"
+        "- Your table has up to 100,000 rows and 1,000 input columns, excluding the column you "
+        "want to predict.\n\n"
+        "These limits reflect the datasets used to test the framework. Recommendations are "
+        "available for tasks within this scope."
+    )
+    if not st.checkbox("My task meets these conditions.", key="scope"):
+        st.caption("Tick the box to continue. If your task does not meet these conditions, the "
+                   "guide cannot recommend a tool, because the tools were not compared on such "
+                   "tasks.")
         return
-    if None in answers.values():
-        st.info("Answer the scope questions to continue.")
-        return
+    # Confirming the conditions answers the scope questions S1 to S3 (Table 4.10).
+    answers.update({"S1": "Yes", "S2": "No", "S3": "No"})
 
     st.subheader("Environment", anchor=False)
     ask("E1", "Which operating system will the tool run on?", ("Linux", "macOS", "Windows"),
         help_text="The benchmark ran on Linux, so Linux has no restrictions. On macOS and "
                   "Windows, some tools need a container or additional system software.")
     ask("E2", "Can containers be used?",
-        help_text="For example Docker or Apple container, to run a Linux environment.")
+        help_text="A container runs a separate Linux system on your computer, for example "
+                  "with Docker Desktop. If you do not know or need permission from IT to "
+                  "install Docker, answer No.")
     if answers["E2"] == "No":
         ask("E3", "Can additional system software be installed, such as Java, an OpenMP library, "
-                  "or build tools?")
-    ask("E4", "How much memory is available?", MEMORY)
+                  "or build tools?",
+            help_text="This means software installed on the computer itself, outside Python, "
+                      "which often requires administrator rights. If you cannot install "
+                      "programs yourself, answer No.")
+    ask("E4", "How much memory is available?", MEMORY,
+        help_text="The working memory (RAM) of the computer. On a Mac, see Apple menu, "
+                  "About This Mac. On Windows, see Settings, System, About.")
 
     st.subheader("Dataset characteristics", anchor=False)
-    st.caption("If you cannot check a characteristic, answer Not sure. It is then not used for "
-               "the order, and the related warnings are shown as a precaution.")
+    st.caption("Don't know an answer? Choose Not sure. For D2 to D6, the guide then assumes "
+               "No. For D7 to D11, it shows the related tips anyway.")
     with st.expander("How to check these characteristics with Python"):
         st.code(CHECK_SNIPPET, language="python")
         st.caption("Categories stored as numeric codes (D8) and identifier columns (D9) cannot "
@@ -243,25 +264,33 @@ def questionnaire():
     ask("D1", "What should be predicted?", TASK_TYPES,
         "Two classes: binary classification. More than two classes: multiclass "
         "classification. A number: regression.")
-    ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE)
-    ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE)
+    ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE,
+        help_text="Each row is one example, such as one patient or one customer.")
+    ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE,
+        help_text="Predictor columns are all columns used to make the prediction, that is, "
+                  "every column except the one to predict.")
     ask("D4", "Are more than one third of the predictors categorical?", YES_NO_UNSURE,
-        help_text="Examples include region, product type, and payment method.")
+        help_text="Categorical columns contain a limited set of categories instead of "
+                  "measurements, such as region, product type, or payment method.")
     ask("D5", "Do more than one third of the rows have at least one missing value?",
-        YES_NO_UNSURE)
+        YES_NO_UNSURE, help_text="A row counts if any of its cells is empty.")
     classification = answers["D1"] in TASK_TYPES[:2]
     if classification:
         ask("D6", "Is the most frequent class more than ten times as frequent as the least "
-                  "frequent class?", YES_NO_UNSURE)
+                  "frequent class?", YES_NO_UNSURE,
+            help_text="For example, 1,000 healthy patients and fewer than 100 sick ones.")
         ask("D7", "Are the class labels stored as numbers?", YES_NO_UNSURE,
             help_text="For example, 0 and 1 used as labels for two categories.")
     ask("D8", "Are categories stored as numeric codes?", YES_NO_UNSURE,
         help_text="For example, regions represented by codes 1, 2, and 3.")
     ask("D9", "Does the table contain identifier columns, such as names or ID numbers?",
         YES_NO_UNSURE)
-    ask("D10", "Are there empty or constant columns?", YES_NO_UNSURE)
+    ask("D10", "Are there empty or constant columns?", YES_NO_UNSURE,
+        help_text="An empty column has no values. A constant column has the same value in "
+                  "every row.")
     if classification:
-        ask("D11", "Does any class have fewer than ten examples?", YES_NO_UNSURE)
+        ask("D11", "Does any class have fewer than ten examples?", YES_NO_UNSURE,
+            help_text="For example, a diagnosis that occurs in fewer than ten rows.")
 
     st.subheader("Usage context", anchor=False)
     ask("U1", "Do you prefer tools that accept the table without declaring column types or "
