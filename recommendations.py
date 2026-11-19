@@ -17,8 +17,6 @@ DATA = Path(__file__).parent / "data"
 # ranks (Table 4.8). Ties in the ordering keep this order.
 TOP = ("AutoGluon", "auto-sklearn", "MLJAR AutoML", "FLAML", "H2O AutoML")
 OTHER = ("LightAutoML", "Lightwood", "TPOT")
-# Tools that required neither type declarations nor label recoding (U1).
-LOW_PREP = ("AutoGluon", "FLAML")
 # Tools highlighted for a training time of less than 15 minutes (U2).
 SHORT_BUDGET = ("Lightwood", "LightAutoML")
 
@@ -33,7 +31,17 @@ SEGMENTS = {
 SEGMENT_LABELS = {"all": "All benchmark datasets"}
 SEGMENT_LABELS.update(dict(SEGMENTS.values()))
 
+# Short descriptions of the high segments for the plain-language reasons.
+SEGMENT_PHRASES = {
+    "high_sample_size": "more than 10,000 rows",
+    "high_dimension": "more than 100 predictors",
+    "high_categorical": "many categorical predictors",
+    "high_missing": "many rows with missing values",
+    "high_imbalance": "strongly imbalanced classes",
+}
+
 TASK_TYPES = ("Two classes", "More than two classes", "A number")
+NOT_SURE = "Not sure"
 MEMORY = ("Less than 16 GB", "16 to 32 GB", "More than 32 GB")
 TIME = ("Less than 15 minutes", "About 15 minutes", "More than 15 minutes")
 
@@ -55,18 +63,45 @@ def scope_issues(a):
             (a.get("S1") == "No",
              "The framework requires a single table that contains the column to predict."),
             (a.get("S2") == "Yes",
-             "The framework does not cover free text or data ordered in time."),
+             "The framework does not cover free text or forecasting tasks."),
             (a.get("S3") == "Yes",
              "The benchmark covered at most 100,000 rows and 1,000 predictor columns."),
         ) if applies
     ]
 
 
+def applies(a, question):
+    """A note or warning is shown for Yes and, as a precaution, for Not sure."""
+    return a.get(question) in ("Yes", NOT_SURE)
+
+
+def unanswered_segments(a):
+    """Labels of the characteristics D2 to D6 answered with Not sure."""
+    classification = is_classification(a)
+    return [label for question, (_, label) in SEGMENTS.items()
+            if (classification or question != "D6") and a.get(question) == NOT_SURE]
+
+
+def preparation(tool, a):
+    """Preparation step the tool needed in the tested setup, or None."""
+    if tool == "auto-sklearn":
+        return ("Convert categorical columns to the pandas `category` type, otherwise text "
+                "columns are treated as free text.")
+    if tool == "H2O AutoML":
+        target = " and the target" if is_classification(a) else ""
+        return f"Declare categorical columns{target} as categorical (`enum`)."
+    if tool == "MLJAR AutoML" and a.get("D1") == TASK_TYPES[0]:
+        return ("Encode the two class labels as 0 and 1 and map the predictions back to the "
+                "original labels.")
+    return None
+
+
 def high_segments(a):
     """Segment keys for which the dataset lies in the high segment.
 
-    D6 (class imbalance) applies to classification only. If the dataset is
-    low on every characteristic, the ranks over all 30 datasets are used.
+    D6 (class imbalance) applies to classification only. Not sure counts as
+    not high. If no high segment applies, the ranks over all 30 datasets are
+    used.
     """
     classification = is_classification(a)
     keys = [
@@ -129,28 +164,34 @@ def recommend(a):
                 "100 predictors.")
 
     # Dataset questions (Table 4.12): notes and warnings, no change of order.
-    if a["D2"] == "Yes":
+    unknown = unanswered_segments(a)
+    if unknown:
+        general.append(
+            "You answered Not sure for: " + "; ".join(u[0].lower() + u[1:] for u in unknown)
+            + ". These characteristics were not used for the order. The Python snippet in the "
+            "dataset section shows how to check them.")
+    if applies(a, "D2"):
         notes["MLJAR AutoML"].append(
             "Ranked significantly lower than AutoGluon on the nine datasets with more than 10,000 rows.")
-    if a["D1"] == TASK_TYPES[1] and a.get("D6") == "Yes":
+    if a["D1"] == TASK_TYPES[1] and applies(a, "D6"):
         general.append(
             "On the two strongly imbalanced multiclass datasets, every tool missed at least one "
             "minority class completely. Check per-class recall and F1, not only an overall score.")
-    if classification and a.get("D7") == "Yes":
+    if classification and applies(a, "D7"):
         notes["Lightwood"].append(
             "Declare the target type: Lightwood treated class labels stored as numbers as a numeric target.")
-    if a["D8"] == "Yes":
+    if applies(a, "D8"):
         notes["H2O AutoML"].append(
             "Declare the column types: H2O AutoML chooses the column types itself unless they are "
             "declared, so categories stored as numeric codes may be read as numbers.")
-    if a["D9"] == "Yes":
+    if applies(a, "D9"):
         notes["Lightwood"].append(
             "Removed columns that it classified as identifiers. Check which predictors were retained.")
-    if a["D10"] == "Yes":
+    if applies(a, "D10"):
         general.append(
             "Remove empty or constant columns before training. TPOT failed on empty columns, while "
             "Lightwood and H2O AutoML removed such columns without stopping the run.")
-    if classification and a.get("D11") == "Yes":
+    if classification and applies(a, "D11"):
         notes["AutoGluon"].append(
             "Removed classes with fewer than ten examples in the training data before training in "
             "the tested setup, so these classes were never predicted.")
@@ -159,10 +200,13 @@ def recommend(a):
     # segments (Table 4.8), averaged over the segments.
     segments = high_segments(a)
     scores = {tool: mean(RANKS[key][tool] for key in segments) for tool in TOP + OTHER}
+    # U1 is a preference, not a requirement: tools that need a preparation
+    # step stay recommended but are placed after those that need none.
     prefer_low_prep = a["U1"] == "Yes"
+    prep = {tool: preparation(tool, a) for tool in TOP + OTHER}
     ranked = sorted(
         (tool for tool in TOP if tool not in exclusions),
-        key=lambda tool: (prefer_low_prep and tool not in LOW_PREP, scores[tool]),
+        key=lambda tool: (prefer_low_prep and prep[tool] is not None, scores[tool]),
     )
 
     # Step 5: tools outside the top group (Table 4.13).
@@ -189,4 +233,43 @@ def recommend(a):
         "scores": scores,
         "segments": segments,
         "prefer_low_prep": prefer_low_prep,
+        "preparation": {tool: step for tool, step in prep.items() if step},
+        "reasons": {tool: reason(tool, ranked, prep, segments, prefer_low_prep)
+                    for tool in ranked},
     }
+
+
+ORDINALS = ("best", "second-best", "third-best", "fourth-best", "fifth-best")
+
+
+def _join(names):
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def reason(tool, ranked, prep, segments, prefer_low_prep):
+    """Plain-language reason for the position of a recommended tool.
+
+    Only tools that remain available in the selected environment are named.
+    """
+    if segments == ["all"]:
+        basis = "across all 30 benchmark datasets"
+    else:
+        basis = ("on the benchmark datasets that, like yours, have "
+                 + _join([SEGMENT_PHRASES[key] for key in segments]))
+    if len(ranked) == 1:
+        return "The only recommended tool that is available in your environment."
+    # The datasets are named in the first reason only, to avoid repetition.
+    if ranked.index(tool) > 0:
+        basis = "on the same datasets"
+    no_prep = [t for t in ranked if prep[t] is None]
+    needs_prep = [t for t in ranked if prep[t] is not None]
+    if prefer_low_prep and no_prep and needs_prep:
+        if prep[tool] is None:
+            return (f"Needs no preparation, as you preferred. Among such tools, it had the "
+                    f"{ORDINALS[no_prep.index(tool)]} average result {basis}.")
+        verb = "needs" if len(no_prep) == 1 else "need"
+        return (f"Placed after {_join(no_prep)}, which {verb} no preparation. Among the tools "
+                f"that need a preparation step, it had the "
+                f"{ORDINALS[needs_prep.index(tool)]} average result {basis}.")
+    return (f"The {ORDINALS[ranked.index(tool)]} average result among the available "
+            f"recommended tools {basis}.")

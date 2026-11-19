@@ -5,7 +5,10 @@
     "Data preparation": "None required. The raw table can be passed to the tool.",
     "Settings": "Tested with the preset `best_quality` instead of the default `medium_quality`. The metric of the search can be set with `eval_metric`.",
     "Resource use": "Used the full time budget. Memory peaks of up to about 14 GB.",
-    "Problems and warnings": "For multiclass classification, check whether rare classes are retained: in the tested setup, classes with fewer than ten training examples could be removed and would then never be predicted. Consider adjusting `label_count_threshold` (passed in `learner_kwargs`) if necessary. When little time remains, the tool can reduce model parameters such as the number of trees. A dependency interaction caused a pandas prediction error in the tested macOS setup. Importing fastai first and then resetting `mode.chained_assignment` to `warn` resolved it.",
+    "Problems and warnings": {
+      "general": "When little time remains, the tool can reduce model parameters such as the number of trees. A dependency interaction caused a pandas prediction error in the tested macOS setup. Importing fastai first and then resetting `mode.chained_assignment` to `warn` resolved it.",
+      "classification": "For multiclass tasks, check whether rare classes are retained: in the tested setup, classes with fewer than ten training examples could be removed and would then never be predicted. Consider adjusting `label_count_threshold` (passed in `learner_kwargs`) if necessary."
+    },
     "Documentation": "`auto.gluon.ai`, including a cheat sheet and a quick start for tabular data.",
     "Community": "Discord (`discord.gg/wjUmjqAc2N`), GitHub (`github.com/autogluon/autogluon`)."
   },
@@ -32,38 +35,62 @@
   "H2O AutoML": {
     "Version and licence": "H2O AutoML (package `h2o` 3.46.0.12), Apache License 2.0.",
     "Installation": "Python package, tested with Python 3.11. Requires a supported Java runtime (tested with Java 17), as the tool runs as a local Java server. The packages `numpy` and `pandas` have to be installed separately, and installing `polars` and `pyarrow` speeds up the conversion of results.",
-    "Data preparation": "Categorical columns and the target of classification tasks should be declared as categorical (`enum`), as the tool chooses the column types itself unless they are declared and may read categories stored as numbers as numeric values.",
+    "Data preparation": {
+      "general": "Categorical columns should be declared as categorical (`enum`), as the tool chooses the column types itself unless they are declared and may read categories stored as numbers as numeric values.",
+      "classification": "Declare the target as categorical as well."
+    },
     "Settings": "Default search configuration. Only the runtime, resources, seed, and metric were set. The metric for ranking the models can be set with `sort_metric`, but macro-F1 is not available. The Java heap limit (`max_mem_size`) should leave memory available for the Python client and, where XGBoost is available, for XGBoost, which runs outside the Java heap. H2O recommends giving the heap at most two thirds of the available memory.",
     "Resource use": "Used the full time budget. Memory peaks of up to about 15 GB.",
-    "Problems and warnings": "XGBoost is not supported on Windows or on the Apple M1 chip according to the documentation, and it was not available on the tested Apple M4 Pro either, natively or in Linux containers. The tool then searches without XGBoost models, which can be checked with `H2OXGBoostEstimator.available()`. Categories that did not occur in training are treated as unknown when predicting. Individual models can fail during the search without stopping it. Check the distribution of predicted classes, as the tool predicted mostly one class on a tested task with little signal.",
+    "Problems and warnings": {
+      "general": "XGBoost is not supported on Windows or on the Apple M1 chip according to the documentation, and it was not available on the tested Apple M4 Pro either, natively or in Linux containers. The tool then searches without XGBoost models, which can be checked with `H2OXGBoostEstimator.available()`. Categories that did not occur in training are treated as unknown when predicting. Individual models can fail during the search without stopping it.",
+      "classification": "Check the distribution of predicted classes, as the tool predicted mostly one class on a tested task with little signal."
+    },
     "Documentation": "`docs.h2o.ai`, AutoML section of the user guide.",
     "Community": "GitHub Discussions (`github.com/h2oai/h2o-3/discussions`), Stack Overflow (tag `h2o`)."
   },
   "LightAutoML": {
     "Version and licence": "LightAutoML 0.4.2, Apache License 2.0.",
     "Installation": "Python package, tested with Python 3.11. Installation took about 15 minutes. On macOS, training stopped responding in the tested setup, so a Linux container is recommended. The optional extra for text data is not needed for tabular data, and its absence only produces warnings at import.",
-    "Data preparation": "None for the input. The predicted class probabilities have to be mapped to the class labels with the tool's class mapping.",
+    "Data preparation": {
+      "general": "None for the input.",
+      "classification": "The predicted class probabilities have to be mapped to the class labels with the tool's class mapping."
+    },
     "Settings": "Default preset (`TabularAutoML`). The metric can be set when defining the task (`Task`).",
     "Resource use": "Usually finished well before the time budget. Memory peaks of up to about 5 GB.",
-    "Problems and warnings": "Check the distribution of predicted classes and compare performance with a majority-class baseline. Majority-only predictions occurred in a tested task with substantial missingness, many predictors, and severe class imbalance, although these characteristics were not established as the cause. If a class has fewer examples than cross-validation folds, the tool reduces the number of folds itself and warns that this is not recommended.",
+    "Problems and warnings": {
+      "general": "",
+      "classification": "Check the distribution of predicted classes and compare performance with a majority-class baseline. Majority-only predictions occurred in a tested task with substantial missingness, many predictors, and severe class imbalance, although these characteristics were not established as the cause. If a class has fewer examples than cross-validation folds, the tool reduces the number of folds itself and warns that this is not recommended."
+    },
     "Documentation": "`lightautoml.readthedocs.io`, including tutorials.",
     "Community": "Telegram (`t.me/lightautoml`), GitHub (`github.com/sb-ai-lab/LightAutoML`)."
   },
   "Lightwood": {
     "Version and licence": "Lightwood 25.12.1.0, GNU General Public License 3.0.",
     "Installation": "Python package, tested with Python 3.11. Needs language data (NLTK) when it treats a column as text and downloads them if missing, which requires internet access unless the data are installed beforehand.",
-    "Data preparation": "The target type should be declared for classification tasks, as class labels stored as numbers can otherwise be treated as a numeric target.",
+    "Data preparation": {
+      "general": "None required.",
+      "classification": "Declare the target type, as class labels stored as numbers can otherwise be treated as a numeric target."
+    },
     "Settings": "Default settings, including its default metrics balanced accuracy and R². Other metrics can be specified in the model specification.",
     "Resource use": "Usually finished well before the time budget. Memory peaks of up to about 3 GB.",
-    "Problems and warnings": "Inspect inferred column types and retained predictors, because the tool automatically excludes columns classified as identifiers or as empty. These decisions can appear in the logs. Compare classification performance with a majority-class baseline: the tool scored below that baseline in one tested task. This observation does not establish a general effect of missingness or dimensionality.",
+    "Problems and warnings": {
+      "general": "Inspect inferred column types and retained predictors, because the tool automatically excludes columns classified as identifiers or as empty. These decisions can appear in the logs.",
+      "classification": "Compare performance with a majority-class baseline: the tool scored below that baseline in one tested task. This observation does not establish a general effect of missingness or dimensionality."
+    },
     "Documentation": "`mindsdb.github.io/lightwood`, including tutorials.",
     "Community": "MindsDB community Slack, GitHub (`github.com/mindsdb/lightwood`)."
   },
   "MLJAR AutoML": {
     "Version and licence": "MLJAR AutoML (package `mljar-supervised` 1.3.2), MIT Licence.",
     "Installation": "Python package, tested with Python 3.11. The first import after installation took about three minutes.",
-    "Data preparation": "None for most tasks. For the tested `Compete` configuration, encode binary labels as 0 and 1 and map predictions back to the original labels, which avoided a stacking-related prediction failure.",
-    "Settings": "Tested in mode `Compete` instead of the default `Explain`. The metric of the search can be set with `eval_metric`. Its F1 metric is computed for the positive class in binary tasks and as micro-F1, which equals accuracy, in multiclass tasks. Writes a report with a leaderboard and explanations for each run.",
+    "Data preparation": {
+      "general": "None required for regression and multiclass tasks.",
+      "classification": "In binary tasks with the tested `Compete` configuration, encode the labels as 0 and 1 and map predictions back to the original labels, which avoided a stacking-related prediction failure."
+    },
+    "Settings": {
+      "general": "Tested in mode `Compete` instead of the default `Explain`. The metric of the search can be set with `eval_metric`. Writes a report with a leaderboard and explanations for each run.",
+      "classification": "Its F1 metric is computed for the positive class in binary tasks and as micro-F1, which equals accuracy, in multiclass tasks."
+    },
     "Resource use": "Used the full time budget, sometimes slightly more. Memory peaks of up to about 6 GB.",
     "Problems and warnings": "For tables with more than 10,000 rows, consider AutoGluon as an alternative: MLJAR AutoML ranked significantly lower on the tested datasets with more than 10,000 rows. This does not establish which tool will perform best on a new table.",
     "Documentation": "`supervised.mljar.com`, examples in `github.com/mljar/mljar-examples`.",
@@ -72,7 +99,10 @@
   "TPOT": {
     "Version and licence": "TPOT 1.1.0, GNU Lesser General Public License 3.0.",
     "Installation": "Python package, tested with Python 3.11. The tested installation required `setuptools` below version 81 because a dependency used `pkg_resources`. The installed version 1.x has a different interface from version 0.x, to which many online examples still refer.",
-    "Data preparation": "The built-in preprocessing (`preprocessing=True`) should be enabled, and columns entirely missing in the training data should be removed. In the tested `TPOTClassifier` wrapper, text class labels were returned as encoded numbers and had to be decoded with `label_encoder_`.",
+    "Data preparation": {
+      "general": "The built-in preprocessing (`preprocessing=True`) should be enabled, and columns entirely missing in the training data should be removed.",
+      "classification": "In the tested `TPOTClassifier` wrapper, text class labels were returned as encoded numbers and had to be decoded with `label_encoder_`."
+    },
     "Settings": "Default search configuration. Only the runtime, resources, seed, and metric were set. The time limit is set in minutes (`max_time_mins`), and the metric of the search with `scorers`.",
     "Resource use": "Often exceeded the time limit, by up to about 65%. Memory peaks of up to about 30 GB.",
     "Problems and warnings": "Allow time beyond the optimisation budget, as total fit time exceeded the configured limit in the tests. Monitor memory when using parallel workers: in one observed run, the workers reached about 30 GB of the 32 GB limit and two processes were stopped by the operating system. Reducing `n_jobs` may reduce memory pressure, but this mitigation was not tested.",

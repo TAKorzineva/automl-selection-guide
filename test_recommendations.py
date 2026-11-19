@@ -151,3 +151,55 @@ def test_tpot_budget_warning_always():
 def test_system_software_question_skipped_with_containers():
     answers = {k: v for k, v in BASE.items() if k != "E3"}   # E2 = Yes, E3 not asked
     assert not recommend(answers)["excluded"]
+
+
+# Corrections after the walkthrough -------------------------------------
+def test_reason_names_only_available_tools():
+    r = run(E1="macOS", E2="No", E3="No", U1="Yes")
+    assert r["ranked"] == ["MLJAR AutoML"]
+    reason = r["reasons"]["MLJAR AutoML"]
+    assert "AutoGluon" not in reason and "FLAML" not in reason
+    linux = run(E2="No", E3="No", U1="Yes")          # H2O and auto-sklearn excluded
+    assert linux["ranked"] == ["AutoGluon", "FLAML", "MLJAR AutoML"]
+    assert "AutoGluon and FLAML" in linux["reasons"]["MLJAR AutoML"]
+    for text in linux["reasons"].values():
+        assert "H2O" not in text and "auto-sklearn" not in text
+
+
+def test_preparation_is_task_specific():
+    assert "MLJAR AutoML" in run(U1="Yes")["preparation"]
+    for task in ("More than two classes", "A number"):
+        r = run(D1=task, U1="Yes")
+        assert "MLJAR AutoML" not in r["preparation"]
+        assert r["ranked"].index("MLJAR AutoML") < r["ranked"].index("auto-sklearn")
+    assert "target" not in run(D1="A number")["preparation"]["H2O AutoML"]
+
+
+def test_preference_does_not_exclude():
+    r = run(U1="Yes")
+    assert set(r["ranked"]) == set(TOP)
+    assert {"auto-sklearn", "H2O AutoML", "MLJAR AutoML"} <= set(r["preparation"])
+
+
+def test_not_sure_segments_are_not_used():
+    r = run(D2="Not sure", D3="Yes")
+    assert r["segments"] == ["high_dimension"]
+    assert any("Not sure" in g and "10,000 rows" in g for g in r["general"])
+    assert "MLJAR AutoML" in r["notes"]            # D2 note shown as precaution
+    assert run(D2="Not sure", D3="Not sure", D4="Not sure", D5="Not sure",
+               D6="Not sure")["segments"] == ["all"]
+
+
+def test_not_sure_notes_shown_as_precaution():
+    r = run(D7="Not sure", D8="Not sure", D9="Not sure", D10="Not sure", D11="Not sure")
+    assert "H2O AutoML" in r["notes"] and "AutoGluon" in r["notes"]
+    assert any("empty or constant" in g for g in r["general"])
+    assert r["ranked"] == run()["ranked"]
+
+
+def test_reasons_are_plain_language():
+    r = run(D2="Yes", D4="Yes")
+    for text in r["reasons"].values():
+        assert "rank" not in text.lower() and "segment" not in text.lower()
+    assert "more than 10,000 rows and many categorical predictors" in r["reasons"][r["ranked"][0]]
+    assert "same datasets" in r["reasons"][r["ranked"][1]]

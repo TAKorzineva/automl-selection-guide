@@ -10,8 +10,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from recommendations import (LOW_PREP, MEMORY, RANKS, SEGMENT_LABELS, TASK_TYPES,
-                             TIME, TOP, recommend, scope_issues)
+from recommendations import (MEMORY, NOT_SURE, RANKS, SEGMENT_LABELS, TASK_TYPES,
+                             TIME, recommend, scope_issues)
 
 DATA = Path(__file__).parent / "data"
 CARDS = json.loads((DATA / "tool_cards.json").read_text(encoding="utf-8"))
@@ -31,6 +31,31 @@ FIT_TIMES = {
     "LightAutoML": "median 176 seconds, maximum about 9 minutes",
 }
 YES_NO = ("Yes", "No")
+YES_NO_UNSURE = ("Yes", "No", NOT_SURE)
+CHECK_SNIPPET = """import pandas as pd
+
+df = pd.read_csv("your_table.csv")   # your table
+target = "column_to_predict"         # the column to predict
+X, y = df.drop(columns=[target]), df[target]
+
+print("Rows:", len(df))                                              # D2
+print("Predictors:", X.shape[1])                                     # D3
+categorical = X.select_dtypes(exclude="number").columns
+print("Share of categorical predictors:",
+      round(len(categorical) / X.shape[1], 2))                       # D4
+print("Share of rows with a missing value:",
+      round(X.isna().any(axis=1).mean(), 2))                         # D5
+print("Empty or constant columns:",
+      [c for c in X if X[c].nunique(dropna=True) <= 1])              # D10
+
+# Classification only
+counts = y.value_counts()
+print("Most / least frequent class:",
+      round(counts.max() / counts.min(), 1))                         # D6
+print("Labels stored as numbers:",
+      pd.api.types.is_numeric_dtype(y))                              # D7
+print("Smallest class:", counts.min())                               # D11
+"""
 
 st.set_page_config(page_title="AutoML Selection Guide", layout="centered")
 st.title("AutoML Selection Guide", anchor=False)
@@ -45,9 +70,23 @@ st.caption(
 guide, library = st.tabs(["Get recommendations", "Browse tool cards"])
 
 
-def show_card(tool):
+def card_text(value, task):
+    """Card field as text. Classification-specific parts are labelled, and
+    hidden for regression (task "regression") in the results."""
+    if isinstance(value, str):
+        return value
+    general, specific = value["general"], value["classification"]
+    if task == "regression":
+        return general or "Nothing specific to regression tasks."
+    if task == "classification":
+        return " ".join(part for part in (general, specific) if part)
+    labelled = f"*For classification tasks:* {specific}"
+    return f"{general}  \n{labelled}" if general else labelled
+
+
+def show_card(tool, task=None):
     for label, value in CARDS[tool].items():
-        st.markdown(f"**{label}**  \n{value}")
+        st.markdown(f"**{label}**  \n{card_text(value, task)}")
     st.markdown(f"[Open official documentation]({DOCS[tool]})")
 
 
@@ -55,7 +94,8 @@ with library:
     st.caption(
         "These cards describe the versions and settings tested in the thesis. Resource use was "
         "observed with a budget of 15 minutes, 8 CPU cores, and 32 GB of memory. It is not a "
-        "minimum requirement or a guaranteed upper limit."
+        "minimum requirement or a guaranteed upper limit. Passages marked for classification "
+        "tasks do not apply to regression."
     )
     for tool in CARDS:
         with st.expander(tool):
@@ -70,53 +110,45 @@ def ask(key, label, options=YES_NO, help_text=None):
                             horizontal=len(options) <= 3)
 
 
-def position_reason(tool, result):
-    segments = result["segments"]
-    score = result["scores"][tool]
-    if segments == ["all"]:
-        basis = "over all 30 benchmark datasets"
-    elif len(segments) == 1:
-        basis = f"in the high segment ({SEGMENT_LABELS[segments[0]].lower()})"
-    else:
-        basis = None
-    if basis is None:
-        text = (f"Mean rank {score:.2f} over the {len(segments)} high segments that apply "
-                "to your dataset.")
-    else:
-        text = f"Average rank {score:.2f} {basis}."
+def show_preparation(tool, result):
+    step = result["preparation"].get(tool)
+    if not step:
+        return
     if result["prefer_low_prep"]:
-        if tool in LOW_PREP:
-            text += (" Placed ahead of the tools that need preparation, because it accepted "
-                     "the table without type declarations or label recoding in the tested setup.")
-        else:
-            text += (" Placed after AutoGluon and FLAML, which accepted the table without type "
-                     "declarations or label recoding.")
-    return text
+        st.warning(f"Needs a preparation step, although you preferred none: {step} Your answer "
+                   "is treated as a preference, so the tool is still recommended.")
+    else:
+        st.markdown(f"Preparation step: {step}")
 
 
-def show_results(result):
+def show_results(result, task):
     st.header("Your recommendations", anchor=False)
-    st.caption(
-        "The top-group tools did not differ significantly in the benchmark, so the order is "
-        "indicative, not a prediction of the best tool for your data. Treat it as a shortlist "
-        "to evaluate on your own data. The benchmark used a 15-minute budget, 8 CPU cores, "
-        "and 32 GB of memory."
-    )
     for message in result["general"]:
         st.warning(message)
 
-    st.subheader("Top group", anchor=False)
+    st.subheader("Recommended tools", anchor=False)
+    st.caption(
+        "These five tools achieved the best results in the benchmark of 30 datasets, and the "
+        "differences between them were too small to be statistically significant. Each of them "
+        "is a reasonable choice. The order is a tie-breaker based on benchmark datasets that "
+        "resemble yours, not a prediction of the best tool for your data, so treat the list "
+        "as a shortlist to try on your own data."
+    )
     if not result["ranked"]:
-        st.info("Your environment excludes every tool in the top group. "
+        st.info("Your environment excludes all five recommended tools. "
                 "Review the other available tools below.")
+    elif result["prefer_low_prep"] and all(t in result["preparation"] for t in result["ranked"]):
+        st.info("None of the recommended tools that are available in your environment works "
+                "without preparation, so the order follows the benchmark results only.")
     for position, tool in enumerate(result["ranked"], 1):
         with st.container(border=True):
             st.markdown(f"**{position}. {tool}**")
-            st.write(position_reason(tool, result))
+            st.write(result["reasons"][tool])
+            show_preparation(tool, result)
             for note in result["notes"].get(tool, []):
                 st.markdown(f"- {note}")
             with st.expander(f"View {tool} tool card"):
-                show_card(tool)
+                show_card(tool, task)
 
     if result["alternatives"]:
         st.subheader("Other available tools", anchor=False)
@@ -124,15 +156,16 @@ def show_results(result):
             highlighted = tool in result["short_budget"]
             label = f"{tool} (possible alternative for less than 15 minutes)" if highlighted else tool
             with st.expander(label, expanded=highlighted):
-                st.write(f"Average rank {RANKS['all'][tool]:.2f} over all 30 datasets. Ranked "
-                         "significantly lower than the best tool in the overall comparison.")
+                st.write("Achieved significantly weaker results than the best tool across all 30 "
+                         "benchmark datasets.")
                 if highlighted:
                     st.write(f"Finished well before the 15-minute budget in the benchmark "
                              f"({FIT_TIMES[tool]}). These times do not guarantee a similar "
                              "time on a new dataset.")
+                show_preparation(tool, result)
                 for note in result["notes"].get(tool, []):
                     st.markdown(f"- {note}")
-                show_card(tool)
+                show_card(tool, task)
 
     if result["excluded"]:
         with st.expander("Tools excluded by your environment", expanded=True):
@@ -143,17 +176,28 @@ def show_results(result):
 
     with st.expander("Benchmark evidence"):
         segments = result["segments"]
-        st.write("Average ranks of the recommended top-group tools on the benchmark datasets "
-                 "used for the order (1 = best). If several segments apply, their mean "
-                 "decides the order.")
-        shown = result["ranked"]
-        table = {"Tool": list(shown)}
+        st.write(
+            "On each benchmark dataset, the eight tools were ranked from 1 (best) to 8. The "
+            "table shows their average rank on the datasets used for your order. A high "
+            "segment is the group of benchmark datasets that share a characteristic of your "
+            "dataset, such as more than 10,000 rows. If your dataset belongs to no high "
+            "segment, all 30 datasets are used. If it belongs to several, the mean of their "
+            "average ranks decides the order.")
+        st.write(
+            "The five recommended tools form the top group: in the Friedman and Nemenyi test "
+            "over all 30 datasets, none of them ranked significantly lower than the best tool, "
+            "AutoGluon. The other tools did.")
+        shown = result["ranked"] + result["alternatives"]
+        table = {"Tool": list(shown),
+                 "Group": ["Recommended"] * len(result["ranked"])
+                          + ["Other"] * len(result["alternatives"])}
         for segment in segments:
             table[SEGMENT_LABELS[segment]] = [f"{RANKS[segment][t]:.2f}" for t in shown]
         if len(segments) > 1:
             table["Mean"] = [f"{result['scores'][t]:.2f}" for t in shown]
         st.dataframe(table, hide_index=True)
         st.caption(
+            "The benchmark used a 15-minute budget, 8 CPU cores, and 32 GB of memory. "
             "Ranks are pooled over the task types. Each high segment contains only five to ten "
             "datasets, so the differences are descriptive. All notes and warnings refer to the "
             "tool versions and settings of the benchmark."
@@ -163,8 +207,8 @@ def show_results(result):
 def questionnaire():
     st.subheader("Task scope", anchor=False)
     ask("S1", "Is the data a single table that contains the column to predict?")
-    ask("S2", "Does the table contain free text, such as comments or descriptions, or data "
-              "ordered in time, such as daily sales?")
+    ask("S2", "Does the task involve free text, such as comments or descriptions, or "
+              "forecasting future values from past values, such as next month's sales?")
     ask("S3", "Does the table have more than 100,000 rows or more than 1,000 columns besides "
               "the column to predict?")
     issues = scope_issues(answers)
@@ -189,30 +233,42 @@ def questionnaire():
     ask("E4", "How much memory is available?", MEMORY)
 
     st.subheader("Dataset characteristics", anchor=False)
+    st.caption("If you cannot check a characteristic, answer Not sure. It is then not used for "
+               "the order, and the related warnings are shown as a precaution.")
+    with st.expander("How to check these characteristics with Python"):
+        st.code(CHECK_SNIPPET, language="python")
+        st.caption("Categories stored as numeric codes (D8) and identifier columns (D9) cannot "
+                   "be detected reliably by code, so check them by looking at the columns. Such "
+                   "codes are counted as numeric in the share of categorical predictors.")
     ask("D1", "What should be predicted?", TASK_TYPES,
         "Two classes: binary classification. More than two classes: multiclass "
         "classification. A number: regression.")
-    ask("D2", "Does the table have more than 10,000 rows?")
-    ask("D3", "Does the table have more than 100 predictor columns?")
-    ask("D4", "Are more than one third of the predictors categorical?",
+    ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE)
+    ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE)
+    ask("D4", "Are more than one third of the predictors categorical?", YES_NO_UNSURE,
         help_text="Examples include region, product type, and payment method.")
-    ask("D5", "Do more than one third of the rows have at least one missing value?")
+    ask("D5", "Do more than one third of the rows have at least one missing value?",
+        YES_NO_UNSURE)
     classification = answers["D1"] in TASK_TYPES[:2]
     if classification:
         ask("D6", "Is the most frequent class more than ten times as frequent as the least "
-                  "frequent class?")
-        ask("D7", "Are the class labels stored as numbers?",
+                  "frequent class?", YES_NO_UNSURE)
+        ask("D7", "Are the class labels stored as numbers?", YES_NO_UNSURE,
             help_text="For example, 0 and 1 used as labels for two categories.")
-    ask("D8", "Are categories stored as numeric codes?",
+    ask("D8", "Are categories stored as numeric codes?", YES_NO_UNSURE,
         help_text="For example, regions represented by codes 1, 2, and 3.")
-    ask("D9", "Does the table contain identifier columns, such as names or ID numbers?")
-    ask("D10", "Are there empty or constant columns?")
+    ask("D9", "Does the table contain identifier columns, such as names or ID numbers?",
+        YES_NO_UNSURE)
+    ask("D10", "Are there empty or constant columns?", YES_NO_UNSURE)
     if classification:
-        ask("D11", "Does any class have fewer than ten examples?")
+        ask("D11", "Does any class have fewer than ten examples?", YES_NO_UNSURE)
 
     st.subheader("Usage context", anchor=False)
-    ask("U1", "Should the tool accept the table without declaring column types or recoding "
-              "class labels?")
+    ask("U1", "Do you prefer tools that accept the table without declaring column types or "
+              "recoding class labels?",
+        help_text="This is a preference, not a requirement. Tools that need such a step are "
+                  "still recommended, but placed after the tools that need none, and the step "
+                  "is flagged.")
     ask("U2", "How much time is available for training?", TIME)
 
     completed = None not in answers.values()
@@ -231,7 +287,8 @@ def questionnaire():
     else:
         status.caption("All questions are answered. Select Get recommendations.")
     if completed and submitted == answers:
-        show_results(recommend(answers))
+        task = "classification" if classification else "regression"
+        show_results(recommend(answers), task)
 
 with guide:
     questionnaire()
