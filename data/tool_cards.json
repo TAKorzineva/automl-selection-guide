@@ -68,7 +68,7 @@
     "Version and licence": "Lightwood 25.12.1.0, GNU General Public License 3.0.",
     "Installation": "Python package, tested with Python 3.11. Needs language data (NLTK) when it treats a column as text and downloads them if missing, which requires internet access unless the data are installed beforehand.",
     "Data preparation": {
-      "general": "None required.",
+      "general": "",
       "classification": "Declare the target type, as class labels stored as numbers can otherwise be treated as a numeric target."
     },
     "Settings": "Default settings, including its default metrics balanced accuracy and R². Other metrics can be specified in the model specification.",

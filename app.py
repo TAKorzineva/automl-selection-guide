@@ -38,23 +38,23 @@ df = pd.read_csv("your_table.csv")   # your table
 target = "column_to_predict"         # the column to predict
 X, y = df.drop(columns=[target]), df[target]
 
-print("Rows:", len(df))                                              # D2
-print("Predictors:", X.shape[1])                                     # D3
+print("Rows:", len(df))
+print("Predictors:", X.shape[1])
 categorical = X.select_dtypes(exclude="number").columns
 print("Share of categorical predictors:",
-      round(len(categorical) / X.shape[1], 2))                       # D4
+      round(len(categorical) / X.shape[1], 2))
 print("Share of rows with a missing value:",
-      round(X.isna().any(axis=1).mean(), 2))                         # D5
+      round(X.isna().any(axis=1).mean(), 2))
 print("Empty or constant columns:",
-      [c for c in X if X[c].nunique(dropna=True) <= 1])              # D10
+      [c for c in X if X[c].nunique(dropna=True) <= 1])
 
 # Classification only
 counts = y.value_counts()
 print("Most / least frequent class:",
-      round(counts.max() / counts.min(), 1))                         # D6
+      round(counts.max() / counts.min(), 1))
 print("Labels stored as numbers:",
-      pd.api.types.is_numeric_dtype(y))                              # D7
-print("Smallest class:", counts.min())                               # D11
+      pd.api.types.is_numeric_dtype(y))
+print("Smallest class:", counts.min())
 """
 
 st.set_page_config(page_title="AutoML Selection Guide", layout="centered")
@@ -77,7 +77,7 @@ def card_text(value, task):
         return value
     general, specific = value["general"], value["classification"]
     if task == "regression":
-        return general or "Nothing specific to regression tasks."
+        return general or "None for regression tasks."
     if task == "classification":
         return " ".join(part for part in (general, specific) if part)
     labelled = f"*For classification tasks:* {specific}"
@@ -103,10 +103,16 @@ with library:
 
 
 answers = {}
+# Keep all answers when questions are hidden, for example when the scope box
+# is unticked and ticked again. Streamlit otherwise removes the state of
+# widgets that are not shown in a run.
+for _key in list(st.session_state):
+    if _key != "submitted_answers":
+        st.session_state[_key] = st.session_state[_key]
 
 
 def ask(key, label, options=YES_NO, help_text=None):
-    answers[key] = st.radio(f"{key}. {label}", options, index=None, key=key, help=help_text,
+    answers[key] = st.radio(label, options, index=None, key=key, help=help_text,
                             horizontal=len(options) <= 3)
 
 
@@ -124,18 +130,21 @@ def show_preparation(tool, result):
 def show_results(result, task):
     st.header("Your recommendations", anchor=False)
     ranked = result["ranked"]
+    budget = f" {result['budget_note']}" if result["budget_note"] else ""
     if len(ranked) == 1:
         st.success(f"Start with {ranked[0]}, the only recommended tool available in your "
-                   "environment.")
+                   f"environment.{budget}")
     elif ranked:
         st.success(f"Start with {ranked[0]}. If it does not suit your data or setup, try "
-                   f"{ranked[1]} next.")
+                   f"{ranked[1]} next.{budget}")
+    elif budget:
+        st.warning(budget.strip())
 
     st.subheader("Recommended tools", anchor=False)
     st.caption(
-        "These five tools achieved the best results in the benchmark of 30 datasets, and the "
-        "differences between them were too small to be statistically significant. Each of them "
-        "is a reasonable choice. The order is a tie-breaker based on benchmark datasets that "
+        "Five tools formed the leading benchmark group. Those available for your environment "
+        "are listed below. The differences between them were too small to be statistically "
+        "significant, so each of them is a reasonable choice. The order is a tie-breaker based on benchmark datasets that "
         "resemble yours, not a prediction of the best tool for your data, so treat the list "
         "as a shortlist to try on your own data."
     )
@@ -254,16 +263,21 @@ def questionnaire():
                   "About This Mac. On Windows, see Settings, System, About.")
 
     st.subheader("Dataset characteristics", anchor=False)
-    st.caption("Don't know an answer? Choose Not sure. For D2 to D6, the guide then assumes "
-               "No. For D7 to D11, it shows the related tips anyway.")
+    st.caption("Don’t know an answer? Choose “Not sure”. The Python script below helps you "
+               "check most of the answers.")
     with st.expander("How to check these characteristics with Python"):
         st.code(CHECK_SNIPPET, language="python")
-        st.caption("Categories stored as numeric codes (D8) and identifier columns (D9) cannot "
-                   "be detected reliably by code, so check them by looking at the columns. Such "
-                   "codes are counted as numeric in the share of categorical predictors.")
+        st.caption("Categories stored as numeric codes and identifier columns cannot be detected "
+                   "reliably by code, so check them by looking at the columns. Such codes are "
+                   "counted as numeric in the share of categorical predictors.")
     ask("D1", "What should be predicted?", TASK_TYPES,
         "Two classes: binary classification. More than two classes: multiclass "
         "classification. A number: regression.")
+    classification = answers["D1"] in TASK_TYPES[:2]
+
+    st.markdown("**Size and content of the data**")
+    st.caption("These answers decide the order of the recommended tools. “Not sure” is "
+               "treated as No.")
     ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE,
         help_text="Each row is one example, such as one patient or one customer.")
     ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE,
@@ -274,11 +288,15 @@ def questionnaire():
                   "measurements, such as region, product type, or payment method.")
     ask("D5", "Do more than one third of the rows have at least one missing value?",
         YES_NO_UNSURE, help_text="A row counts if any of its cells is empty.")
-    classification = answers["D1"] in TASK_TYPES[:2]
     if classification:
         ask("D6", "Is the most frequent class more than ten times as frequent as the least "
                   "frequent class?", YES_NO_UNSURE,
             help_text="For example, 1,000 healthy patients and fewer than 100 sick ones.")
+
+    st.markdown("**Format of the data**")
+    st.caption("These answers do not change the order. They add preparation tips and warnings, "
+               "which are also shown for “Not sure”.")
+    if classification:
         ask("D7", "Are the class labels stored as numbers?", YES_NO_UNSURE,
             help_text="For example, 0 and 1 used as labels for two categories.")
     ask("D8", "Are categories stored as numeric codes?", YES_NO_UNSURE,

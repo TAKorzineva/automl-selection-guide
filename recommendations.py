@@ -213,12 +213,14 @@ def recommend(a):
     alternatives = [tool for tool in OTHER if tool not in exclusions]
     short = a["U2"] == TIME[0]
     short_budget = [tool for tool in SHORT_BUDGET if short and tool in alternatives]
+    # The budget qualification is returned separately, so that the output can
+    # show it next to the starting recommendation.
+    budget_note = None
     if short:
-        general.append(
-            "Budgets shorter than 15 minutes were not tested, so the framework makes no statement "
-            "about which tool performs best with less time.")
+        budget_note = ("Budgets shorter than 15 minutes were not tested, so the framework makes "
+                       "no statement about which tool performs best with less time.")
     if a["U2"] == TIME[2]:
-        general.append("Budgets longer than 15 minutes were not tested.")
+        budget_note = "Budgets longer than 15 minutes were not tested."
     notes["TPOT"].append(
         "Exceeded the budget by more than the tolerance of 10% in 19 of its 29 completed runs, "
         "by up to 65%.")
@@ -230,6 +232,7 @@ def recommend(a):
         "excluded": dict(exclusions),
         "notes": dict(notes),
         "general": general,
+        "budget_note": budget_note,
         "scores": scores,
         "segments": segments,
         "prefer_low_prep": prefer_low_prep,

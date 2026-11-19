@@ -135,13 +135,14 @@ def test_several_segments_are_averaged():
 def test_short_budget():
     r = run(U2="Less than 15 minutes")
     assert r["short_budget"] == ["Lightwood", "LightAutoML"]
-    assert any("not tested" in g for g in r["general"])
+    assert "not tested" in r["budget_note"]
     mac = run(U2="Less than 15 minutes", E1="macOS", E2="No")
     assert mac["short_budget"] == ["Lightwood"]
 
 
 def test_long_budget():
-    assert any("longer" in g for g in run(U2="More than 15 minutes")["general"])
+    assert "longer" in run(U2="More than 15 minutes")["budget_note"]
+    assert run()["budget_note"] is None
 
 
 def test_tpot_budget_warning_always():
