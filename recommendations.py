@@ -268,11 +268,12 @@ def reason(tool, ranked, prep, segments, prefer_low_prep):
     needs_prep = [t for t in ranked if prep[t] is not None]
     if prefer_low_prep and no_prep and needs_prep:
         if prep[tool] is None:
-            return (f"Needs no preparation, as you preferred. Among such tools, it had the "
-                    f"{ORDINALS[no_prep.index(tool)]} average result {basis}.")
-        verb = "needs" if len(no_prep) == 1 else "need"
-        return (f"Placed after {_join(no_prep)}, which {verb} no preparation. Among the tools "
-                f"that need a preparation step, it had the "
+            return (f"Accepts the table without column-type declarations or class-label "
+                    f"recoding in the tested setup, as you preferred. Among such tools, it had "
+                    f"the {ORDINALS[no_prep.index(tool)]} average result {basis}.")
+        verb = "accepts" if len(no_prep) == 1 else "accept"
+        return (f"Placed after {_join(no_prep)}, which {verb} the table without these steps. "
+                f"Among the tools that need a type declaration or label recoding, it had the "
                 f"{ORDINALS[needs_prep.index(tool)]} average result {basis}.")
     return (f"The {ORDINALS[ranked.index(tool)]} average result among the available "
             f"recommended tools {basis}.")

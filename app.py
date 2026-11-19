@@ -121,10 +121,11 @@ def show_preparation(tool, result):
     if not step:
         return
     if result["prefer_low_prep"]:
-        st.warning(f"Needs a preparation step, although you preferred none: {step} Your answer "
-                   "is treated as a preference, so the tool is still recommended.")
+        st.warning(f"Needs a column-type declaration or label recoding, which you preferred to "
+                   f"avoid: {step} Your answer is treated as a preference, so the tool is still "
+                   "recommended.")
     else:
-        st.markdown(f"Preparation step: {step}")
+        st.markdown(f"Required in the tested setup: {step}")
 
 
 def show_results(result, task):
@@ -152,8 +153,9 @@ def show_results(result, task):
         st.info("Your environment excludes all five recommended tools. "
                 "Review the other available tools below.")
     elif result["prefer_low_prep"] and all(t in result["preparation"] for t in result["ranked"]):
-        st.info("None of the recommended tools that are available in your environment works "
-                "without preparation, so the order follows the benchmark results only.")
+        st.info("None of the recommended tools that are available in your environment accepts "
+                "the table without column-type declarations or class-label recoding, so the "
+                "order follows the benchmark results only.")
     for position, tool in enumerate(result["ranked"], 1):
         with st.container(border=True):
             st.markdown(f"**{position}. {tool}**")
