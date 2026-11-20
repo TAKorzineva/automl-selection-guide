@@ -14,7 +14,7 @@
   },
   "auto-sklearn": {
     "Version and licence": "auto-sklearn 0.15.0, BSD 3-Clause Licence. No release since 2022.",
-    "Installation": "Officially supports Linux only. Its memory limit relies on resource limits of the Linux kernel, which macOS does not enforce, so on macOS the tool can use up the entire memory. On macOS and Windows, a Linux container is recommended. Python 3.10 was used. The macOS installation required building scikit-learn 0.24 from source with additional build tools, together with older versions of NumPy, SciPy, and pandas. Use the supplied environment pins to reproduce this setup.",
+    "Installation": "Officially supports Linux only. Its memory limit relies on resource limits of the Linux kernel, which macOS does not enforce, so on macOS the tool can use up the entire memory. On macOS and Windows, a Linux container is recommended. Python 3.10 was used. The macOS installation required building scikit-learn 0.24 from source with additional build tools, together with older versions of NumPy, SciPy, and pandas.",
     "Data preparation": "Categorical columns must be converted to the pandas `category` type, as text columns are otherwise treated as free text rather than as categorical.",
     "Settings": "Default search configuration. Only the runtime, resources, seed, and metric were set. The metric of the search can be set with `metric`. The memory limit per worker (`memory_limit`) should be adjusted to the available memory.",
     "Resource use": "Used the full time budget. Memory peaks of up to about 13 GB.",
