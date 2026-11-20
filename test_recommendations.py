@@ -55,6 +55,9 @@ def test_no_system_software_macos_without_containers():
     assert r["ranked"] == ["MLJAR AutoML"]
     assert any("OpenMP" in g for g in r["general"])
     assert not any("OpenMP" in g for g in run(E1="macOS")["general"])
+    native = run(E1="macOS", E2="No", E3="Yes")["general"]
+    assert any("brew install libomp" in g for g in native)
+    assert not any("libomp" in g for g in run(E1="Linux", E2="No", E3="Yes")["general"])
 
 
 def test_no_containers_macos_and_windows():
@@ -84,7 +87,9 @@ def test_dataset_notes():
     r = run(D2="Yes", D7="Yes", D8="Yes", D9="Yes", D10="Yes", D11="Yes")
     assert "MLJAR AutoML" in r["notes"]
     assert any("target type" in n for n in r["notes"]["Lightwood"])
-    assert "H2O AutoML" in r["notes"]  # D8
+    assert "numeric codes" in r["preparation"]["H2O AutoML"]  # D8, merged into the step
+    assert "H2O AutoML" not in r["notes"]
+    assert "numeric codes" not in run()["preparation"]["H2O AutoML"]
     assert any("identifiers" in n for n in r["notes"]["Lightwood"])  # D9
     assert "AutoGluon" in r["notes"]
     assert any("empty or constant" in g for g in r["general"])
@@ -193,7 +198,7 @@ def test_not_sure_segments_are_not_used():
 
 def test_not_sure_notes_shown_as_precaution():
     r = run(D7="Not sure", D8="Not sure", D9="Not sure", D10="Not sure", D11="Not sure")
-    assert "H2O AutoML" in r["notes"] and "AutoGluon" in r["notes"]
+    assert "numeric codes" in r["preparation"]["H2O AutoML"] and "AutoGluon" in r["notes"]
     assert any("empty or constant" in g for g in r["general"])
     assert r["ranked"] == run()["ranked"]
 

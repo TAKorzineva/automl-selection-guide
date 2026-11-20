@@ -94,7 +94,12 @@ def preparation(tool, a):
                 "columns are treated as free text.")
     if tool == "H2O AutoML":
         target = " and the target" if is_classification(a) else ""
-        return f"Declare categorical columns{target} as categorical (`enum`)."
+        step = f"Declare categorical columns{target} as categorical (`enum`)."
+        if applies(a, "D8"):
+            # D8 (Table 4.12) is merged into this step instead of a separate note.
+            step += (" H2O AutoML chooses the column types itself unless they are declared, so "
+                     "categories stored as numeric codes may otherwise be read as numbers.")
+        return step
     if tool == "MLJAR AutoML" and a.get("D1") == TASK_TYPES[0]:
         return ("Encode the two class labels as 0 and 1 and map the predictions back to the "
                 "original labels.")
@@ -142,6 +147,10 @@ def recommend(a):
             general.append(
                 "Other tools that use LightGBM or XGBoost may also fail on macOS without the "
                 "OpenMP library. Only FLAML was tested without it.")
+    if a["E1"] == "macOS" and not containers and a.get("E3") == "Yes":
+        general.append(
+            "On macOS, install the OpenMP library before using AutoGluon or FLAML, for example "
+            "with Homebrew (`brew install libomp`). FLAML failed without it in the tests.")
     if a["E1"] in ("macOS", "Windows") and not containers:
         exclusions["auto-sklearn"].append(
             f"Officially supports Linux only, so on {a['E1']} it needs a Linux container.")
@@ -151,8 +160,8 @@ def recommend(a):
     # Internet access is not asked: it concerns only Lightwood, which is
     # outside the top group, so it is covered by a note (Section 4.4.1).
     notes["Lightwood"].append(
-        "Needs internet access during training to download its NLTK language data, "
-        "unless the data are installed beforehand.")
+        "May need internet access during training to download its NLTK language data when it "
+        "treats a column as text, unless the data are installed beforehand.")
     if a["E1"] == "Windows":
         general.append("The tools were not tested on Windows.")
     if a["E4"] != MEMORY[2]:
@@ -186,10 +195,6 @@ def recommend(a):
     if classification and applies(a, "D7"):
         notes["Lightwood"].append(
             "Declare the target type: Lightwood treated class labels stored as numbers as a numeric target.")
-    if applies(a, "D8"):
-        notes["H2O AutoML"].append(
-            "Declare the column types: H2O AutoML chooses the column types itself unless they are "
-            "declared, so categories stored as numeric codes may be read as numbers.")
     if applies(a, "D9"):
         notes["Lightwood"].append(
             "Removed columns that it classified as identifiers. Check which predictors were retained.")
