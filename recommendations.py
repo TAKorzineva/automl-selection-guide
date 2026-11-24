@@ -41,7 +41,6 @@ SEGMENT_PHRASES = {
 }
 
 TASK_TYPES = ("Two classes", "More than two classes", "A number")
-NOT_SURE = "Not sure"
 MEMORY = ("Less than 16 GB", "16 to 32 GB", "More than 32 GB")
 TIME = ("Less than 15 minutes", "About 15 minutes", "More than 15 minutes")
 
@@ -76,15 +75,8 @@ def scope_issues(a):
 
 
 def applies(a, question):
-    """A note or warning is shown for Yes and, as a precaution, for Not sure."""
-    return a.get(question) in ("Yes", NOT_SURE)
-
-
-def unanswered_segments(a):
-    """Labels of the characteristics D2 to D6 answered with Not sure."""
-    classification = is_classification(a)
-    return [label for question, (_, label) in SEGMENTS.items()
-            if (classification or question != "D6") and a.get(question) == NOT_SURE]
+    """A note or warning is shown for Yes. Users who are unsure answer No."""
+    return a.get(question) == "Yes"
 
 
 def preparation(tool, a):
@@ -109,9 +101,8 @@ def preparation(tool, a):
 def high_segments(a):
     """Segment keys for which the dataset lies in the high segment.
 
-    D6 (class imbalance) applies to classification only. Not sure counts as
-    not high. If no high segment applies, the ranks over all 30 datasets are
-    used.
+    D6 (class imbalance) applies to classification only. If no high segment
+    applies, the ranks over all 30 datasets are used.
     """
     classification = is_classification(a)
     keys = [
@@ -178,13 +169,6 @@ def recommend(a):
                 "100 predictors.")
 
     # Dataset questions (Table 4.12): notes and warnings, no change of order.
-    unknown = unanswered_segments(a)
-    if unknown:
-        these = "This characteristic was" if len(unknown) == 1 else "These characteristics were"
-        general.append(
-            "You answered Not sure for: " + "; ".join(u[0].lower() + u[1:] for u in unknown)
-            + f". {these} not used for the order. The Python scripts in the dataset section "
-            "show how to check them.")
     if applies(a, "D2"):
         notes["MLJAR AutoML"].append(
             "Ranked significantly lower than AutoGluon on the nine datasets with more than 10,000 rows.")

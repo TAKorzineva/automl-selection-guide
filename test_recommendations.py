@@ -187,20 +187,22 @@ def test_preference_does_not_exclude():
     assert {"auto-sklearn", "H2O AutoML", "MLJAR AutoML"} <= set(r["preparation"])
 
 
-def test_not_sure_segments_are_not_used():
-    r = run(D2="Not sure", D3="Yes")
+def test_only_yes_selects_segments():
+    r = run(D2="No", D3="Yes")
     assert r["segments"] == ["high_dimension"]
-    assert any("Not sure" in g and "10,000 rows" in g for g in r["general"])
-    assert "MLJAR AutoML" in r["notes"]            # D2 note shown as precaution
-    assert run(D2="Not sure", D3="Not sure", D4="Not sure", D5="Not sure",
-               D6="Not sure")["segments"] == ["all"]
+    assert "MLJAR AutoML" not in r["notes"]        # D2 note only for Yes
+    assert "MLJAR AutoML" in run(D2="Yes")["notes"]
+    assert run()["segments"] == ["all"]
 
 
-def test_not_sure_notes_shown_as_precaution():
-    r = run(D7="Not sure", D8="Not sure", D9="Not sure", D10="Not sure", D11="Not sure")
+def test_format_notes_only_for_yes():
+    r = run(D7="Yes", D8="Yes", D9="Yes", D10="Yes", D11="Yes")
     assert "numeric codes" in r["preparation"]["H2O AutoML"] and "AutoGluon" in r["notes"]
     assert any("empty or constant" in g for g in r["general"])
     assert r["ranked"] == run()["ranked"]
+    base = run()
+    assert "numeric codes" not in base["preparation"]["H2O AutoML"]
+    assert "AutoGluon" not in base["notes"] and not base["general"]
 
 
 def test_reasons_are_plain_language():

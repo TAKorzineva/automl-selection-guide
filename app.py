@@ -10,8 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from recommendations import (MEMORY, NOT_SURE, RANKS, SEGMENT_LABELS, TASK_TYPES,
-                             TIME, recommend)
+from recommendations import MEMORY, RANKS, SEGMENT_LABELS, TASK_TYPES, TIME, recommend
 
 DATA = Path(__file__).parent / "data"
 CARDS = json.loads((DATA / "tool_cards.json").read_text(encoding="utf-8"))
@@ -31,7 +30,6 @@ FIT_TIMES = {
     "LightAutoML": "median 176 seconds, maximum about 9 minutes",
 }
 YES_NO = ("Yes", "No")
-YES_NO_UNSURE = ("Yes", "No", NOT_SURE)
 CHECK_SIZE = """import pandas as pd
 
 df = pd.read_csv("your_table.csv")   # your table
@@ -252,7 +250,7 @@ def questionnaire():
     answers.update({"S1": "Yes", "S2": "No", "S3": "No"})
 
     st.subheader("Environment", anchor=False)
-    ask("E1", "Which operating system will the tool run on?", ("Linux", "macOS", "Windows"),
+    ask("E1", "Which operating system will you use?", ("Linux", "macOS", "Windows"),
         help_text="The benchmark ran on Linux, so Linux has no restrictions. On macOS and "
                   "Windows, some tools need a container or additional system software.")
     ask("E2", "Can containers be used?",
@@ -260,69 +258,65 @@ def questionnaire():
                   "with Docker Desktop. If you do not know or need permission from IT to "
                   "install Docker, answer No.")
     if answers["E2"] == "No":
-        ask("E3", "Can additional system software be installed, such as Java, an OpenMP library, "
-                  "or build tools?",
+        ask("E3", "Can you install system software, such as Java, OpenMP, or build tools?",
             help_text="This means software installed on the computer itself, outside Python, "
                       "which often requires administrator rights. If you cannot install "
                       "programs yourself, answer No.")
-    ask("E4", "How much memory is available?", MEMORY,
+    ask("E4", "How much memory (RAM) does the computer have?", MEMORY,
         help_text="The working memory (RAM) of the computer. On a Mac, see Apple menu, "
                   "About This Mac. On Windows, see Settings, System, About.")
 
     st.subheader("Dataset characteristics", anchor=False)
-    st.caption("Don’t know an answer? Choose “Not sure”. Each group of questions has a short "
-               "Python script that helps you check the answers.")
+    st.caption("If you are not sure about an answer, choose No. Each group of questions has a "
+               "short Python script that helps you check the answers.")
     ask("D1", "What should be predicted?", TASK_TYPES,
         "Two classes: binary classification. More than two classes: multiclass "
         "classification. A number: regression.")
     classification = answers["D1"] in TASK_TYPES[:2]
 
     st.markdown("**Size and content of the data**")
-    st.caption("These answers decide the order of the recommended tools. “Not sure” is "
-               "treated as No.")
+    st.caption("These answers decide the order of the recommended tools.")
     with st.expander("How to check these answers with Python"):
         st.code(CHECK_SIZE, language="python")
         st.caption("Categories stored as numeric codes are counted as numeric here.")
-    ask("D2", "Does the table have more than 10,000 rows?", YES_NO_UNSURE,
+    ask("D2", "Does the table have more than 10,000 rows?",
         help_text="Each row is one example, such as one patient or one customer.")
-    ask("D3", "Does the table have more than 100 predictor columns?", YES_NO_UNSURE,
+    ask("D3", "Does the table have more than 100 predictor columns?",
         help_text="Predictor columns are all columns used to make the prediction, that is, "
                   "every column except the one to predict.")
-    ask("D4", "Are more than one third of the predictors categorical?", YES_NO_UNSURE,
+    ask("D4", "Are more than one third of the predictors categorical?",
         help_text="Categorical columns contain a limited set of categories instead of "
                   "measurements, such as region, product type, or payment method.")
-    ask("D5", "Do more than one third of the rows have at least one missing value?",
-        YES_NO_UNSURE, help_text="A row counts if any of its cells is empty.")
+    ask("D5", "Do more than one third of the rows have missing values?",
+        help_text="A row counts if any of its cells is empty.")
     if classification:
-        ask("D6", "Is the most frequent class more than ten times as frequent as the least "
-                  "frequent class?", YES_NO_UNSURE,
+        ask("D6", "Is the largest class more than ten times larger than the smallest?",
             help_text="For example, 1,000 healthy patients and fewer than 100 sick ones.")
 
     st.markdown("**Format of the data**")
-    st.caption("These answers do not change the order. They add preparation tips and warnings, "
-               "which are also shown for “Not sure”.")
+    st.caption("These answers do not change the order. They only add preparation tips and "
+               "warnings. The tool cards describe all known problems in any case.")
     with st.expander("How to check these answers with Python"):
         st.code(CHECK_FORMAT, language="python")
         st.caption("Categories stored as numeric codes and identifier columns cannot be detected "
                    "reliably by code, so check them by looking at the columns.")
     if classification:
-        ask("D7", "Are the class labels stored as numbers?", YES_NO_UNSURE,
+        ask("D7", "Are the class labels stored as numbers?",
             help_text="For example, 0 and 1 used as labels for two categories.")
-    ask("D8", "Are categories stored as numeric codes?", YES_NO_UNSURE,
+    ask("D8", "Are categories stored as numeric codes?",
         help_text="For example, regions represented by codes 1, 2, and 3.")
-    ask("D9", "Does the table contain identifier columns, such as names or ID numbers?",
-        YES_NO_UNSURE)
-    ask("D10", "Are there empty or constant columns?", YES_NO_UNSURE,
+    ask("D9", "Are there identifier columns, such as names or ID numbers?")
+    ask("D10", "Are there empty or constant columns?",
         help_text="An empty column has no values. A constant column has the same value in "
                   "every row.")
     if classification:
-        ask("D11", "Does any class have fewer than ten examples?", YES_NO_UNSURE,
+        ask("D11", "Does any class have fewer than ten examples?",
             help_text="For example, a diagnosis that occurs in fewer than ten rows.")
 
     st.subheader("Usage context", anchor=False)
-    ask("U1", "Do you prefer tools that accept the table without declaring column types or "
-              "recoding class labels?",
-        help_text="This is a preference, not a requirement. Tools that need such a step are "
+    ask("U1", "Do you prefer tools that accept the table as it is?",
+        help_text="That is, without declaring column types or recoding class labels. This is "
+                  "a preference, not a requirement. Tools that need such a step are "
                   "still recommended, but placed after the tools that need none, and the step "
                   "is flagged.")
     ask("U2", "How much time is available for training?", TIME)
