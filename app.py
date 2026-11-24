@@ -105,6 +105,8 @@ with library:
 
 
 answers = {}
+# Question texts by key, in the order shown, to name unanswered questions.
+LABELS = {}
 # Keep all answers when questions are hidden, for example when the scope box
 # is unticked and ticked again. Streamlit otherwise removes the state of
 # widgets that are not shown in a run.
@@ -114,6 +116,7 @@ for _key in list(st.session_state):
 
 
 def ask(key, label, options=YES_NO, help_text=None):
+    LABELS[key] = label
     answers[key] = st.radio(label, options, index=None, key=key, help=help_text,
                             horizontal=len(options) <= 3)
 
@@ -146,7 +149,8 @@ def show_results(result, task):
     st.subheader("Recommended tools", anchor=False)
     st.caption(
         "Five tools formed the leading benchmark group. Those available for your environment "
-        "are listed below. The differences between them were too small to be statistically "
+        "are listed below. Across all 30 benchmark datasets, the differences between them were "
+        "too small to be statistically "
         "significant, so each of them is a reasonable choice. The order is a tie-breaker based on benchmark datasets that "
         "resemble yours, not a prediction of the best tool for your data, so treat the list "
         "as a shortlist to try on your own data."
@@ -321,21 +325,28 @@ def questionnaire():
                   "is flagged.")
     ask("U2", "How much time is available for training?", TIME)
 
-    completed = None not in answers.values()
-    # One status line above the button, always present, so that the button and
-    # everything below it stay in place when the last question is answered.
-    status = st.empty()
-    if st.button("Get recommendations", type="primary", disabled=not completed):
+    # Unanswered questions in the order shown. A question that appears after an
+    # earlier answer changes (for example E3 when containers cannot be used) is
+    # named here, so that users can find it.
+    missing = [LABELS[key] for key, value in answers.items() if value is None]
+    completed = not missing
+    button_column, status_column = st.columns([1, 2], vertical_alignment="center")
+    with button_column:
+        clicked = st.button("Get recommendations", type="primary", disabled=not completed)
+    if clicked:
         st.session_state["submitted_answers"] = dict(answers)
     submitted = st.session_state.get("submitted_answers")
-    if not completed:
-        status.caption("Answer all visible questions to get recommendations.")
-    elif submitted == answers:
-        status.caption("Your recommendations are shown below.")
-    elif submitted is not None:
-        status.caption("Select Get recommendations again to apply your updated answers.")
-    else:
-        status.caption("All questions are answered. Select Get recommendations.")
+    with status_column:
+        if len(missing) == 1:
+            st.info(f"One question left: {missing[0]}")
+        elif missing:
+            st.info(f"{len(missing)} questions left. First unanswered: {missing[0]}")
+        elif submitted == answers:
+            st.caption("Your recommendations are shown below.")
+        elif submitted is not None:
+            st.caption("Select Get recommendations again to apply your updated answers.")
+        else:
+            st.caption("All questions are answered. Select Get recommendations.")
     if completed and submitted == answers:
         task = "classification" if classification else "regression"
         show_results(recommend(answers), task)

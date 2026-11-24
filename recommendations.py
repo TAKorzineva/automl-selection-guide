@@ -171,7 +171,9 @@ def recommend(a):
     # Dataset questions (Table 4.12): notes and warnings, no change of order.
     if applies(a, "D2"):
         notes["MLJAR AutoML"].append(
-            "Ranked significantly lower than AutoGluon on the nine datasets with more than 10,000 rows.")
+            "On the nine benchmark datasets with more than 10,000 rows, it ranked significantly "
+            "lower than AutoGluon. This was the only significant difference among the five "
+            "recommended tools.")
     if a["D1"] == TASK_TYPES[1] and applies(a, "D6"):
         general.append(
             "On the two strongly imbalanced multiclass datasets, every tool missed at least one "
