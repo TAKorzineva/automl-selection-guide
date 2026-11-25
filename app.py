@@ -6,6 +6,7 @@ recommendations.py, and the tool cards follow Appendix D.
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -133,7 +134,58 @@ def show_preparation(tool, result):
         st.markdown(f"Required in the tested setup: {step}")
 
 
-def show_results(result, task):
+BASIS = ("Based on the benchmark of eight AutoML tools carried out in October 2026, with the "
+         "tool versions named in the tool cards. Newer versions may behave differently.")
+
+
+def build_report(answers, result):
+    """Plain-text record of the answers and the result, for download."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = ["AutoML Selection Guide: answers and recommendations",
+             f"Created: {now}",
+             BASIS,
+             "",
+             "YOUR ANSWERS",
+             "- The task meets the scope conditions: Yes"]
+    lines += [f"- {LABELS[key]} {value}" for key, value in answers.items() if key in LABELS]
+
+    lines += ["", "RECOMMENDED TOOLS (in this order)"]
+    if not result["ranked"]:
+        lines.append("None. Your environment excludes all five recommended tools.")
+    for position, tool in enumerate(result["ranked"], 1):
+        lines.append(f"{position}. {tool}")
+        lines.append(f"   Reason: {result['reasons'][tool]}")
+        step = result["preparation"].get(tool)
+        if step:
+            lines.append(f"   Preparation: {step}")
+        lines += [f"   Note: {note}" for note in result["notes"].get(tool, [])]
+    if result["budget_note"]:
+        lines.append(result["budget_note"])
+
+    if result["general"]:
+        lines += ["", "BEFORE YOU START"]
+        lines += [f"- {message}" for message in result["general"]]
+
+    if result["alternatives"]:
+        lines += ["", "OTHER AVAILABLE TOOLS (significantly weaker results across all 30 "
+                      "benchmark datasets)"]
+        for tool in result["alternatives"]:
+            lines.append(f"- {tool}")
+            step = result["preparation"].get(tool)
+            if step:
+                lines.append(f"   Preparation: {step}")
+            lines += [f"   Note: {note}" for note in result["notes"].get(tool, [])]
+
+    if result["excluded"]:
+        lines += ["", "TOOLS EXCLUDED BY YOUR ENVIRONMENT"]
+        for tool, reasons in result["excluded"].items():
+            lines.append(f"- {tool}: " + " ".join(reasons))
+
+    lines += ["", "App: https://automl-selection-guide.streamlit.app"]
+    return "\n".join(lines) + "\n"
+
+
+def show_results(result, task, answers):
     st.header("Your recommendations", anchor=False)
     ranked = result["ranked"]
     budget = f" {result['budget_note']}" if result["budget_note"] else ""
@@ -145,6 +197,13 @@ def show_results(result, task):
                    f"{ranked[1]} next.{budget}")
     elif budget:
         st.warning(budget.strip())
+    st.download_button(
+        "Download answers and recommendations",
+        data=build_report(answers, result),
+        file_name=f"automl_recommendations_{datetime.now(timezone.utc):%Y%m%d_%H%M}.txt",
+        mime="text/plain",
+        help="Saves your answers and the full result as a text file.",
+    )
 
     st.subheader("Recommended tools", anchor=False)
     st.caption(
@@ -350,7 +409,7 @@ def questionnaire():
             st.caption("All questions are answered. Select Get recommendations.")
     if completed and submitted == answers:
         task = "classification" if classification else "regression"
-        show_results(recommend(answers), task)
+        show_results(recommend(answers), task, answers)
 
 with guide:
     questionnaire()

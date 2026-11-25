@@ -46,3 +46,4 @@ The tests check every rule of Tables 4.10 to 4.13 and the worked example in Sect
 - Containers are asked first (E2). The question on system software (E3) is only asked if containers cannot be used.
 - Internet access is not asked. It concerns only Lightwood, which gets a note that it needs internet during training unless its NLTK language data are installed beforehand.
 - No data is uploaded; the app uses only the answers.
+- The result page has a button that downloads the answers and the full result as a text file, with the date and the basis of the recommendations.
